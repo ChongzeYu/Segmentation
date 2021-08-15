@@ -1,4 +1,6 @@
 # sys.setrecursionlimit(1000000)  # solve problem 'maximum recursion depth exceeded'
+import sys
+sys.path.insert(0,'/home/chongze/Segmentation') 
 import torch
 import torch.backends.cudnn as cudnn
 import torch.nn as nn
@@ -7,13 +9,12 @@ import time
 import timeit
 import os
 from torch import optim
-from .utils.utils import setup_seed, init_weight, netParams
+from utils.utils import setup_seed, init_weight, netParams
 from utils.metric.metric import get_iou
-from .model.model_builder import build_model
-from .dataset.dataset_builder import build_dataset_train
+from model.model_builder import build_model
+from dataset.dataset_builder import build_dataset_train
 import numpy as np
-from utils.loss.loss import LovaszSoftmax, CrossEntropyLoss2d, CrossEntropyLoss2dLabelSmooth,\
-    ProbOhemCrossEntropy2d, FocalLoss2d
+from utils.loss.loss import  CrossEntropyLoss2d, CrossEntropyLoss2dLabelSmooth,FocalLoss2d
 from argparse import ArgumentParser
 import matplotlib
 matplotlib.use('Agg')
@@ -29,7 +30,7 @@ GLOBAL_SEED = 1234
 def parse_args():
     parser = ArgumentParser(description='Efficient semantic segmentation')
     # model and dataset
-    parser.add_argument('--model', type=str, default="Fast-SCNN", help="model name: (default Fast-SCNN)")
+    parser.add_argument('--model', type=str, default="FastSCNN", help="model name: (default Fast-SCNN)")
     parser.add_argument('--dataset', type=str, default="TAS500", help="dataset: TAS500")
     parser.add_argument('--input_size', type=str, default="360,480", help="input size of model")
     parser.add_argument('--num_workers', type=int, default=4, help=" the number of parallel threads")
@@ -55,7 +56,7 @@ def parse_args():
     parser.add_argument('--use_lovaszsoftmax', action='store_true', default=False, help='LovaszSoftmax Loss for cityscapes dataset')
     parser.add_argument('--use_focal', action='store_true', default=False,help=' FocalLoss2d for cityscapes dataset')
     # cuda setting
-    parser.add_argument('--cuda', type=bool, default=True, help="running on CPU or GPU")
+    parser.add_argument('--cuda', type=bool, default=False, help="running on CPU or GPU")
     parser.add_argument('--gpus', type=str, default="0", help="default GPU devices (0,1)")
     # checkpoint and log
     parser.add_argument('--resume', type=str, default="",
@@ -130,20 +131,23 @@ def train_model(args):
 # ========================================================================================================================== 
     weight = torch.from_numpy(datas['classWeights'])
 
-    if args.dataset == 'TAS500' and args.use_ohem:
+    if args.dataset == 'TAS500':
+        criteria = CrossEntropyLoss2d(weight=weight, ignore_label=ignore_label)
+    elif args.dataset == 'TAS500' and args.use_ohem:
         min_kept = int(args.batch_size // len(args.gpus) * h * w // 16)
-        criteria = ProbOhemCrossEntropy2d(use_weight=True, ignore_label=ignore_label, thresh=0.7, min_kept=min_kept)
+        # criteria = ProbOhemCrossEntropy2d(use_weight=True, ignore_label=ignore_label, thresh=0.7, min_kept=min_kept)
     elif args.dataset == 'TAS500' and args.use_label_smoothing:
         criteria = CrossEntropyLoss2dLabelSmooth(weight=weight, ignore_label=ignore_label)
     elif args.dataset == 'TAS500' and args.use_lovaszsoftmax:
-        criteria = LovaszSoftmax(ignore_index=ignore_label)
+        # criteria = LovaszSoftmax(ignore_index=ignore_label)
+        pass
     elif args.dataset == 'TAS500' and args.use_focal:
         criteria = FocalLoss2d(weight=weight, ignore_index=ignore_label)
     else:
         raise NotImplementedError(
             "This repository now supports two datasets: TAS500, %s is not included" % args.dataset)
     
-    # move loss to cuda
+    # move loss and model to cuda
     if args.cuda:
         criteria = criteria.cuda()
         if torch.cuda.device_count() > 1:
@@ -154,6 +158,8 @@ def train_model(args):
             args.gpu_nums = 1
             print("single GPU for training")
             model = model.cuda()  # 1-card data parallel
+    else:
+        args.gpu_nums = 0
 
 # ==========================================================================================================================
 # path for saving model
@@ -306,12 +312,13 @@ def train(args, train_loader, model, criterion, optimizer, epoch):
         start_time = time.time()
         images, labels, _, _ = batch
 
-        if torch_ver == '0.3':
-            images = Variable(images).cuda()
-            labels = Variable(labels.long()).cuda()
-        else:
-            images = images.cuda()
-            labels = labels.long().cuda()
+        if args.cuda:
+            if torch_ver == '0.3':
+                images = Variable(images).cuda()
+                labels = Variable(labels.long()).cuda()
+            else:
+                images = images.cuda()
+                labels = labels.long().cuda()
 
         output = model(images)
         loss = criterion(output, labels)
@@ -370,7 +377,7 @@ if __name__ == '__main__':
     args = parse_args()
 
     if args.dataset == 'TAS500':
-        args.classes = 19
+        args.classes = 23
         args.input_size = '512,1024'
         ignore_label = 255
     else:
