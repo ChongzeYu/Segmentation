@@ -26,10 +26,11 @@ class TAS500(Dataset):
         std: rgb_mean (0.229, 0.224, 0.225)
         ignore_label: 255
     """
-    def __init__(self, root, split='train',crop_size=(512, 1024), mean=(128,128,128), scale=True, mirror=True, ignore_label=255):
+    def __init__(self, root, split='train',crop_size=(512, 1024), mean=(128,128,128),crop=True, scale=True, mirror=True, ignore_label=255):
 
         self.root = root
         self.mode = split
+        self.crop = crop
         self.crop_h, self.crop_w = crop_size
         self.scale = scale
         self.ignore_label = ignore_label
@@ -69,7 +70,7 @@ class TAS500(Dataset):
         # image = image.astype(np.float32) / 255.0
         image = image[:, :, ::-1]  # change to RGB
 
-        if self.mode =="train":
+        if self.crop:
             # random crop (if img size > desired size) or crop after padding(if img size < desired size)
             img_h, img_w = label.shape
             pad_h = max(self.crop_h - img_h, 0)

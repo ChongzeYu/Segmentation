@@ -1,6 +1,6 @@
 # sys.setrecursionlimit(1000000)  # solve problem 'maximum recursion depth exceeded'
 import sys
-sys.path.insert(0,'/home/chongze/Segmentation') 
+sys.path.insert(0,'/home/Segmentation') 
 import torch
 import torch.backends.cudnn as cudnn
 import torch.nn as nn
@@ -35,7 +35,7 @@ def parse_args():
     parser.add_argument('--input_size', type=str, default="360,480", help="input size of model")
     parser.add_argument('--num_workers', type=int, default=4, help=" the number of parallel threads")
     parser.add_argument('--classes', type=int, default=11,
-                        help="the number of classes in the dataset. 19 and 11 for cityscapes and camvid, respectively")
+                        help="the number of classes in the dataset. 23 for new TAS500, respectively")
     parser.add_argument('--train_type', type=str, default="trainval",
                         help="ontrain for training on train set, ontrainval for training on train+val set")
     # training hyper params
@@ -46,11 +46,12 @@ def parse_args():
     parser.add_argument('--lr', type=float, default=5e-4, help="initial learning rate")
     parser.add_argument('--batch_size', type=int, default=8, help="the batch size is set to 16 for 2 GPUs")
     parser.add_argument('--optim',type=str.lower,default='adam',choices=['sgd','adam','radam','ranger'],help="select optimizer")
-    parser.add_argument('--lr_schedule', type=str, default='warmpoly', help='name of lr schedule: poly')
-    parser.add_argument('--num_cycles', type=int, default=1, help='Cosine Annealing Cyclic LR')
+    parser.add_argument('--lr_schedule', type=str, default='warmpoly', help='name of lr schedule: poly')# check
+    parser.add_argument('--num_cycles', type=int, default=1, help='Cosine Annealing Cyclic LR')# dont know
     parser.add_argument('--poly_exp', type=float, default=0.9,help='polynomial LR exponent')
     parser.add_argument('--warmup_iters', type=int, default=500, help='warmup iterations')
     parser.add_argument('--warmup_factor', type=float, default=1.0 / 3, help='warm up start lr=warmup_factor*lr')
+    
     parser.add_argument('--use_label_smoothing', action='store_true', default=False, help="CrossEntropy2d Loss with label smoothing or not")
     parser.add_argument('--use_ohem', action='store_true', default=False, help='OhemCrossEntropy2d Loss for cityscapes dataset')
     parser.add_argument('--use_lovaszsoftmax', action='store_true', default=False, help='LovaszSoftmax Loss for cityscapes dataset')
@@ -88,7 +89,7 @@ def train_model(args):
             raise Exception("No GPU found or Wrong gpu id, please run without --cuda")
 
 # ==========================================================================================================================
-# set the seed 
+# set the seed of numpy, python, torch
 # ==========================================================================================================================
     setup_seed(GLOBAL_SEED)
     print("=====> set Global Seed: ", GLOBAL_SEED)
@@ -103,9 +104,9 @@ def train_model(args):
 # build the model and initialization
 # ==========================================================================================================================
     model = build_model(args.model, num_classes=args.classes)
-    init_weight(model, nn.init.kaiming_normal_,
-            nn.BatchNorm2d, 1e-3, 0.1,
-            mode='fan_in')
+    # init_weight(model, nn.init.kaiming_normal_,
+    #         nn.BatchNorm2d, 1e-3, 0.1,
+    #         mode='fan_in')
 
     # print parameters number  
     print("=====> computing network parameters and FLOPs")
@@ -131,21 +132,21 @@ def train_model(args):
 # ========================================================================================================================== 
     weight = torch.from_numpy(datas['classWeights'])
 
-    if args.dataset == 'TAS500':
-        criteria = CrossEntropyLoss2d(weight=weight, ignore_label=ignore_label)
-    elif args.dataset == 'TAS500' and args.use_ohem:
-        min_kept = int(args.batch_size // len(args.gpus) * h * w // 16)
-        # criteria = ProbOhemCrossEntropy2d(use_weight=True, ignore_label=ignore_label, thresh=0.7, min_kept=min_kept)
-    elif args.dataset == 'TAS500' and args.use_label_smoothing:
-        criteria = CrossEntropyLoss2dLabelSmooth(weight=weight, ignore_label=ignore_label)
-    elif args.dataset == 'TAS500' and args.use_lovaszsoftmax:
-        # criteria = LovaszSoftmax(ignore_index=ignore_label)
-        pass
-    elif args.dataset == 'TAS500' and args.use_focal:
-        criteria = FocalLoss2d(weight=weight, ignore_index=ignore_label)
-    else:
-        raise NotImplementedError(
-            "This repository now supports two datasets: TAS500, %s is not included" % args.dataset)
+    # if args.dataset == 'TAS500':
+    criteria = CrossEntropyLoss2d(weight=weight, ignore_label=ignore_label)
+    # elif args.dataset == 'TAS500' and args.use_ohem:
+    #     min_kept = int(args.batch_size // len(args.gpus) * h * w // 16)
+    #     # criteria = ProbOhemCrossEntropy2d(use_weight=True, ignore_label=ignore_label, thresh=0.7, min_kept=min_kept)
+    # elif args.dataset == 'TAS500' and args.use_label_smoothing:
+    #     criteria = CrossEntropyLoss2dLabelSmooth(weight=weight, ignore_label=ignore_label)
+    # elif args.dataset == 'TAS500' and args.use_lovaszsoftmax:
+    #     # criteria = LovaszSoftmax(ignore_index=ignore_label)
+    #     pass
+    # elif args.dataset == 'TAS500' and args.use_focal:
+    #     criteria = FocalLoss2d(weight=weight, ignore_index=ignore_label)
+    # else:
+    #     raise NotImplementedError(
+    #         "This repository now supports two datasets: TAS500, %s is not included" % args.dataset)
     
     # move loss and model to cuda
     if args.cuda:
@@ -204,7 +205,7 @@ def train_model(args):
             filter(lambda p: p.requires_grad, model.parameters()), lr=args.lr, momentum=0.9, weight_decay=1e-4)
     elif args.optim == 'adam':
         optimizer = optim.Adam(
-            filter(lambda p: p.requires_grad, model.parameters()), lr=args.lr, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-4)
+            filter(lambda p: p.requires_grad, model.parameters()), lr=args.lr, betas=(0.9, 0.999), eps=1e-08, weight_decay=0)
 
 
     # learming scheduling 'poly'
@@ -319,9 +320,12 @@ def train(args, train_loader, model, criterion, optimizer, epoch):
             else:
                 images = images.cuda()
                 labels = labels.long().cuda()
-
+        else:
+            labels = labels.long()
+            
         output = model(images)
         loss = criterion(output, labels)
+
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
@@ -378,7 +382,7 @@ if __name__ == '__main__':
 
     if args.dataset == 'TAS500':
         args.classes = 23
-        args.input_size = '512,1024'
+        # args.input_size = '512,1024'
         ignore_label = 255
     else:
         raise NotImplementedError(

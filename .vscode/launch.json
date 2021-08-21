@@ -16,7 +16,49 @@
             "type": "python",
             "request": "launch",
             "program": "${workspaceFolder}/train.py",
-            "console": "integratedTerminal"
+            "console": "integratedTerminal",
+            "args": ["--model","FastSCNN",
+                    "--num_workers","3",
+                    "--dataset","TAS500",
+                    "--input_size","620,2026",
+                    "--max_epochs","150",
+                    "--classes","23",
+                    "--train_type","train",
+                    "--random_mirror","False","--random_scale","False",
+                    "--lr","0.01","--poly_exp","0.9",
+                    "--batch_size","8",
+                    "--cuda","True",
+                    // "--savedir","",
+                    // "--logFile",""
+                ]
+        },
+        {
+            "name": "test",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/test.py",
+            "console": "integratedTerminal",
+            "args": ["--model","FastSCNN",
+                    "--num_workers","3",
+                    "--dataset","TAS500",
+                    "--checkpoint","./checkpoint/TAS500/FastSCNNbs8gpu1_train/model_150.pth",
+                    "--cuda","True",
+                    "--classes","23", 
+                ]
+        },
+        {
+            "name": "predict",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/predict.py",
+            "console": "integratedTerminal",
+            "args": ["--model","FastSCNN",
+                    "--num_workers","3",
+                    "--dataset","TAS500",
+                    "--checkpoint","./checkpoint/TAS500/FastSCNNbs8gpu1_train/model_150.pth",
+                    "--cuda","True",
+                    "--classes","23", 
+                ]
         }
     ]
 }
